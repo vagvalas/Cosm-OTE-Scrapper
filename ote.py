@@ -40,52 +40,59 @@ url_template = 'https://www.11888.gr/search/white_pages/?query={}&location={}&pa
 
 location = input("Vale tin topothesia me tin morfi 'Kallithea, Attiki': ")
 
-# Open the file and read the list of words
 
-
-# Loop over the words and make a request for each one
 filenamecsv = input("Enter a filename for the CSV file: ")
 if not filenamecsv.endswith('.csv'):
     filenamecsv += '.csv'
 
 with open(filenamecsv, 'w', encoding='utf-8', newline='') as f:
     writer = csv.writer(f)
-    writer.writerow(['word', 'lastname','firstname','street1', 'number1', 'detailed_url'])
+    writer.writerow([
+        'word', 'lastname', 'firstname', 'street1', 'number1',
+        'phone', 'residential', 'subregion', 'municipality',
+        'postal_code', 'provider', 'detailed_url'
+    ])
 
     for i, word in enumerate(wordlist):
-        # Replace {here} with the current word in the URL template
         encoded_word = urllib.parse.quote(word, safe='')
         encoded_location = urllib.parse.quote(location, safe='')
-        url = url_template.format(encoded_word,location,0)
+        url = url_template.format(encoded_word, location, 0)
         response = requests.get(url)
         data = json.loads(response.text)
-        # Make the request and extract the desired information from the JSON response
+
         number_of_pages = data['data']['total_pages']
         if number_of_pages == 0:
-            print(round((i/allnames)*100, 2),"% ","skipping",i+1,"name",word,"has no data")
+            print(round((i / allnames) * 100, 2), "% ", "skipping", i + 1, "name", word, "has no data")
             continue
         else:
             for currentpage in range(number_of_pages):
-                url = url_template.format(encoded_word,location, currentpage)
+                url = url_template.format(encoded_word, location, currentpage)
                 response = requests.get(url)
                 data = json.loads(response.text)
-                print(round((i/allnames)*100, 2),"% ",word,'name',i+1,'of',allnames,'total of',currentpage+1,'/',number_of_pages,'pages')
+                print(round((i / allnames) * 100, 2), "% ", word, 'name', i + 1, 'of', allnames, 'total of', currentpage + 1, '/', number_of_pages, 'pages')
+
                 results = data.get('data', {}).get('results', [])
                 for result in results:
-                    lastname = result['name']['last']
-                    firstname = result['name']['first']
-                    street1 = result['address']['street1']
-                    number1 = result['address']['number1']
-                    detailed_url = result['detail_url']
-                    detailed_url = "https://11888.gr" + detailed_url
-                    #writer.writerow([word, lastname, firstname, street1, number1, detailed_url])
-                    # Add 'provider' extraction here
-                    providers = []
-                    if 'phones' in result:
-                        for phone in result['phones']:
-                            if 'provider' in phone:
-                                providers.append(phone['provider'])
-    
-                # Join the list of providers into a comma-separated string
-                providers_str = ', '.join(providers)
-                writer.writerow([word, lastname, firstname, street1, number1, detailed_url, providers_str])
+                    lastname = result['name'].get('last', '')
+                    firstname = result['name'].get('first', '')
+                    street1 = result['address'].get('street1', '')
+                    number1 = result['address'].get('number1', '')
+                    postal_code = result['address'].get('postal_code', '')
+                    subregion = result['address'].get('subregion', {}).get('name', '')
+                    municipality = result['address'].get('municipality', {}).get('name', '')
+                    detailed_url = "https://11888.gr" + result.get('detail_url', '')
+
+                    # Get phones (first one if exists)
+                    phones = result.get('phones', [])
+                    phone = phones[0].get('number', '') if phones else ''
+                    residential = phones[0].get('type', '') if phones else ''
+
+                    # Get all providers
+                    providers = [phone.get('provider', '') for phone in phones if 'provider' in phone]
+                    providers_str = ', '.join(providers)
+
+                    writer.writerow([
+                        word, lastname, firstname, street1, number1,
+                        phone, residential, subregion, municipality,
+                        postal_code, providers_str, detailed_url
+                    ])
